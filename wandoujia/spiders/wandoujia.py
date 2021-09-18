@@ -3,13 +3,14 @@ import re
 import json
 from urllib.parse import urlencode
 from wandoujia.items import WandoujiaMainItem
+from datetime import datetime
 # -*- coding:utf-8 -*-
 
 class wandoujiaSpider(scrapy.Spider):
     name = 'wandoujia'
-    
     custom_settings = {
         'DOWNLOAD_DELAY': 5,
+        'DOWNLOAD_WARNSIZE': 104857600, 
     }
     def __init__(self):
         #豌豆荚软件分类页面，用来获取软件类别
@@ -48,6 +49,7 @@ class wandoujiaSpider(scrapy.Spider):
                         'cate_child_code':cate_child_code,
                         'priority' : 0}
                 #print(dict)
+
                 yield scrapy.Request(url , callback = self.parse , meta = dict, priority = 0)
 
     #解析第一页的信息并提取，同时递归访问其余Ajax页面（第二页及以后）
@@ -107,54 +109,53 @@ class wandoujiaSpider(scrapy.Spider):
             yield scrapy.Request(url,callback=self.parse,meta=dict, priority = -(pri + 1))
     
     #解析应用的第一页面，即https://www.wandoujia.com/apps/xxx/
+    #根据下载量决定是否下载，抓取基本信息
     def parseMain(self, response):
-        historyPageUrl = response.xpath('/html/body/div[2]/div[2]/div[2]/div[1]/div[6]/h2/a/@href').get()
-        if not historyPageUrl == None:
-            yield scrapy.Request(historyPageUrl, callback = self.parseMainHistory)
-    #解析应用的主历史页面
-    def parseMainHistory(self, response):
-        contents = response.xpath('/html/body/div[2]/div[2]/div[2]/div[1]/ul/li')
-        for content in contents:
-            SubHistory = content.xpath('./a/@href').get()
-            yield scrapy.Request(SubHistory, callback = self.parseSubHistory)
-    def parseSubHistory(self, response):
-        contents = response.xpath('/html/body/div[2]/div[2]/div[1]/div[3]/div[1]/ul/li')
-        for content in contents:
-            #应用编号
-            data_app_id = content.xpath('./a[2]/@data-app-id').get()    
-            #应用名
-            data_app_name = content.xpath('./a[2]/@data-app-name').get()
-            #包名
-            data_app_pname = content.xpath('./a[2]/@data-app-pname').get()
-            #版本号
-            data_app_vname = content.xpath('./a[2]/@data-app-vname').get()
 
-            dict = {'data_app_id' : data_app_id,
-                    'data_app_name' : data_app_name, 
-                    'data_app_pname' : data_app_pname,
-                    'data_app_vname' : data_app_vname}
+        data_app_id = response.xpath('/html/body/div[2]/div[2]/div[1]/div[2]/div[3]/a[2]/@data-app-id').get()   # 编号
 
-            url = content.xpath('./a[2]/@href').get()
-            yield scrapy.Request(url, callback = self.parseApp, meta = dict)       
-    def parseApp(self, response):
-        size = response.xpath('/html/body/div[2]/div[3]/div[2]/div[1]/dl/dd[1]/text()').get()
-
-        year = (re.search('....年', response.xpath('/html/body/div[2]/div[2]/div/div[2]/div[2]/p[2]/text()').get())).group(0)
+        data_app_name = response.xpath('/html/body/div[2]/div[2]/div[1]/div[2]/div[3]/a[2]/@data-app-name').get()   # 名称
         
-        download_url = response.xpath('/html/body/div[2]/div[2]/div/div[2]/div[3]/a[1]/@href').get()
-        
-        size = size.replace(' ', '')
-        year = year.replace(' ', '')
+        data_app_pname = response.xpath('/html/body/div[2]/div[2]/div[1]/div[2]/div[3]/a[2]/@data-app-pname').get()   # 包名
 
-        meta = response.meta
+        data_app_vname = response.xpath('/html/body/div[2]/div[2]/div[1]/div[2]/div[3]/a[2]/@data-app-vname').get()   # 版本号
+
+        download_url = response.xpath('/html/body/div[2]/div[2]/div[1]/div[2]/div[3]/a[1]/@href').get()          # 下载链接
+
+        size = response.xpath('/html/body/div[2]/div[2]/div[2]/div[2]/div[1]/dl/dd[1]/meta/@content').get()          # 大小
+
+
+        downloadCnt = response.xpath('/html/body/div[2]/div[2]/div[1]/div[2]/div[2]/div[1]/span[1]/i/text()').get()         # 下载量 21.5亿
+
+        update_time = response.xpath('/html/body/div[2]/div[2]/div[1]/div[2]/div[2]/span[2]/span/@datetime').get()            # 更新时间 2021/08/26
+
+        if download_url == None or downloadCnt == None or update_time == None:
+            return
+
+        if '0' <= downloadCnt[-1] and downloadCnt[-1] <= '9':
+            download_cnt = float(downloadCnt)
+        else:
+            download_cnt = float(downloadCnt[:-1])
+            if downloadCnt[-1] == '万':
+                download_cnt = download_cnt * 10000
+            elif downloadCnt[-1] == '亿':
+                download_cnt = download_cnt * 10000 * 10000
+
+        download_cnt = int(download_cnt)
+        
+        # 小于十万次下载，或者更新时间大于90天就不要了
+        if download_cnt < 100000 or (datetime.now() - datetime.strptime(update_time, '%Y/%m/%d')).days > 90:
+            return
+
         item = WandoujiaMainItem()
-        item['data_app_id'] = meta['data_app_id']
-        item['data_app_name'] = meta['data_app_name']
-        item['data_app_pname'] = meta['data_app_pname']
-        item['data_app_vname'] = meta['data_app_vname']
+        item['data_app_id'] = data_app_id
+        item['data_app_name'] = data_app_name
+        item['data_app_pname'] = data_app_pname
+        item['data_app_vname'] = data_app_vname
         item['download_url'] = download_url
         item['size'] = size
-        item['year'] = year[0 : 4]
+        item['update_time'] = update_time
+        item['download_cnt'] = download_cnt
 
         yield(item)
 

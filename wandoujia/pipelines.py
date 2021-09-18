@@ -47,12 +47,18 @@ class MyFilesPipeline(FilesPipeline):
         if item['size'].endswith('GB'):
             realsize = float(item['size'][:-2]) * 1024
 
-        if realsize <= 20:
+        if realsize <= 100:
             dict = {'data_app_id' : item['data_app_id'],
+                    'data_app_name' : item['data_app_name'],
+                    'data_app_pname' : item['data_app_pname'],
                     'data_app_vname' : item['data_app_vname'],
-                    'year' : item['year']}
+                    'download_url' : item['download_url'],
+                    'size' : item['size'],
+                    'update_time' : item['update_time'],
+                    'download_cnt' : item['download_cnt']
+                    }
             yield scrapy.Request(item['download_url'], meta = dict)
 
     def file_path(self, request, response=None, info=None):
         meta = request.meta;
-        return '/' + meta['year'] + '/' + meta['data_app_id'] + 'v' + meta['data_app_vname']
+        return '/' + meta['data_app_pname'] + '.apk'

@@ -15,7 +15,7 @@ SPIDER_MODULES = ['wandoujia.spiders']
 NEWSPIDER_MODULE = 'wandoujia.spiders'
 
 MONGO_URI = "localhost:27017"
-MONGO_DB = "wandoujia"
+MONGO_DB = "semgrep-wandoujia"
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'wandoujia (+http://www.yourdomain.com)'
 
@@ -73,7 +73,7 @@ ITEM_PIPELINES = {
    'wandoujia.pipelines.WandoujiaPipeline': 300,
    'wandoujia.pipelines.MyFilesPipeline': 47
 }
-FILES_STORE = '/Users/icst/Desktop/apks'
+FILES_STORE = '/mnt/RAID/users_data/caijiajin/Desktop/datasets'
 MEDIA_ALLOW_REDIRECTS =True
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://doc.scrapy.org/en/latest/topics/autothrottle.html
